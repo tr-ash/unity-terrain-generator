@@ -42,9 +42,9 @@ namespace TerrainGenerator
         }
 
         #if ENABLE_UNITY_COLLECTIONS_CHECKS
-        private AtomicSafetyHandle       m_Safety;
-        [NativeSetClassTypeToNullOnSchedule] private DisposeSentinel          m_DisposeSentinel;
-        private static int                        s_staticSafetyId;
+        private AtomicSafetyHandle m_Safety;
+        [NativeSetClassTypeToNullOnSchedule] private DisposeSentinel m_DisposeSentinel;
+        private static int s_staticSafetyId;
 
         [BurstDiscard]
         private static void AssignStaticSafetyId(ref AtomicSafetyHandle safetyHandle)
