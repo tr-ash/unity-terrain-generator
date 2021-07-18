@@ -1,0 +1,24 @@
+{
+    "name": "TerrainGenerator",
+    "rootNamespace": "",
+    "references": [
+        "GUID:2665a8d13d1b3f18800f46e256720795",
+        "GUID:9c6dda6c7922c624cb7ea9a7f1c7d54a",
+        "GUID:b75d3cd3037d383a8d1e2f9a26d73d8a",
+        "GUID:15ce69d7d9d9370c9704e0797a0ab06b",
+        "GUID:725d36de53dc30f9a00742ae18029bcc",
+        "GUID:e0cd26848372d4e5c891c569017e11f1",
+        "GUID:d8b63aba1907145bea998dd612889d6b"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [
+        ""
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
