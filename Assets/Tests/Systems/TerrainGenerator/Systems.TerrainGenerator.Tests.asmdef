@@ -4,7 +4,11 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "TerrainGenerator"
+        "TerrainGenerator",
+        "Unity.PerformanceTesting",
+        "Unity.Burst",
+        "Unity.Burst.CodeGen",
+        "Unity.Burst.Editor"
     ],
     "includePlatforms": [
         "Editor"
