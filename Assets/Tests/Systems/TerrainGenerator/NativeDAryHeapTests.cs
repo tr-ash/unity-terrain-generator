@@ -1,35 +1,30 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
-using Unity.Jobs;
 
 using TerrainGenerator;
 using Unity.Collections;
-using UnityEngine.PlayerLoop;
 
 public class NativeDAryHeapTests
 {
     private static object[] _insertElements =
     {
-        new int[] {1, 2, 3, 4},
-        new int[] {4, 3, 2, 1},
-        new int[] {100, 256, 91, 38, 26, 512, 69, 82},
-        new int[] {1, 1, 1, 2, 2, 2, 3, 3, 4, 5, 5, 5, 5, 6, 7, 8, 9, 9},
-        new int[] {23, 23, 23, 23, 23, 23, 4, 4, 4, 4, 4, 1, 1, 1},
-        new int[] {2, 3, 4, 99, 99, 99, 99, 0, 1, -1, -23}
+        new[] {1, 2, 3, 4},
+        new[] {4, 3, 2, 1},
+        new[] {100, 256, 91, 38, 26, 512, 69, 82},
+        new[] {1, 1, 1, 2, 2, 2, 3, 3, 4, 5, 5, 5, 5, 6, 7, 8, 9, 9},
+        new[] {23, 23, 23, 23, 23, 23, 4, 4, 4, 4, 4, 1, 1, 1},
+        new[] {2, 3, 4, 99, 99, 99, 99, 0, 1, -1, -23}
     };
 
     private static object[] _interleavedPad =
     {
-        new object[] {new int[] {1, 2, 3, 4}, new int[] {4, 3, 2, 1}},
-        new object[] {new int[] {7, 33, 82, 1, 9, 0, -100, 53}, new int[] {4, 3, 2, 1}},
-        new object[] {new int[] {0, 0, 0, 0, 0, 0, 0}, new int[] {99, 99, 99, 99}},
-        new object[] {new int[] {57, 89, 1, 1, 1, 4, 4, 4, 7, 8, 9, 9, 8, 7}, new int[] {1, 0, 643, 111}},
-        new object[] {new int[] {3}, new int[] {2}}
+        new object[] {new[] {1, 2, 3, 4}, new[] {4, 3, 2, 1}},
+        new object[] {new[] {7, 33, 82, 1, 9, 0, -100, 53}, new[] {4, 3, 2, 1}},
+        new object[] {new[] {0, 0, 0, 0, 0, 0, 0}, new[] {99, 99, 99, 99}},
+        new object[] {new[] {57, 89, 1, 1, 1, 4, 4, 4, 7, 8, 9, 9, 8, 7}, new[] {1, 0, 643, 111}},
+        new object[] {new[] {3}, new[] {2}}
     };
 
     private NativeDAryHeap<int> heap;
