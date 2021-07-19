@@ -45,7 +45,7 @@ namespace TerrainGenerator
         {
             public static SpillNode CreateInstance(int id, float spillHeight)
             {
-                return new SpillNode();
+                return new SpillNode(id, spillHeight);
             }
 
             [MarshalAs(UnmanagedType.I4)]
@@ -54,7 +54,7 @@ namespace TerrainGenerator
             [MarshalAs(UnmanagedType.R4)]
             public readonly float spillHeight;
 
-            private SpillNode(int id, int spillHeight)
+            private SpillNode(int id, float spillHeight)
             {
                 this.id = id;
                 this.spillHeight = spillHeight;
