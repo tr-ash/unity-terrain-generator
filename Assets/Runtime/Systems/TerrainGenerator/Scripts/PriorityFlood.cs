@@ -18,6 +18,7 @@ namespace TerrainGenerator
             var pq = new NativeDAryHeap<int>(guessSize, Allocator.Persistent);
             var sq = new NativeQueue<SpillNode>(Allocator.Persistent);
             var psq = new NativeQueue<SpillNode>(Allocator.Persistent);
+            var potential = new NativeQueue<SpillNode>(Allocator.Persistent);
 
             var job = new PriorityFloodJob
             {
@@ -26,6 +27,7 @@ namespace TerrainGenerator
                 Pq = pq,
                 Sq = sq,
                 Psq = psq,
+                Potential = potential,
                 SeedCell = indexOfMin,
                 SideLength = sideLength
             };
@@ -67,9 +69,18 @@ namespace TerrainGenerator
         {
             public NativeArray<float> HeightMap;
             public NativeArray<bool> Processed;
-            public NativeDAryHeap<int> Pq; // Priority queue.
-            public NativeQueue<SpillNode> Sq; // Standard queue.
-            public NativeQueue<SpillNode> Psq; // Spill cell standard queue.
+
+            // Priority queue containing seed cells and potential spill cells.
+            public NativeDAryHeap<int> Pq;
+
+            // Standard queue for tracing depression cells.
+            public NativeQueue<SpillNode> Sq;
+
+            // Standard queue for tracing slope cells.
+            public NativeQueue<SpillNode> Psq;
+
+            // Queue for trying to discard potential spill cells.
+            public NativeQueue<SpillNode> Potential;
 
             public int SideLength;
             public int SeedCell;
@@ -104,6 +115,7 @@ namespace TerrainGenerator
 
                         for (var j = -1; j <= 1; j++)
                         {
+                            // Avoid accidentally doing more work on the focal node.
                             if (i == 0 && j == 0)
                                 continue;
 
@@ -112,26 +124,25 @@ namespace TerrainGenerator
                             if (IsProcessed(n) || IndexOutOfBounds(n))
                                 continue;
 
-                            var neighbourSpill = HeightMap[n];
+                            var nSpillEl = HeightMap[n];
 
-                            if (neighbourSpill <= cellSpill)
+                            if (nSpillEl <= cellSpill)
                             {
-                                HeightMap[n] = cellSpill;
-                                Sq.Enqueue(SpillNode.CreateInstance(n, cellSpill));
-                                ProcessSq();
+                                AddDepressionCell(n, cellSpill);
+                                FillDepression();
                             }
                             else
                             {
-                                Processed[n] = true;
-                                Psq.Enqueue(SpillNode.CreateInstance(n, neighbourSpill));
+                                AddSlopeCell(n, nSpillEl);
                             }
-                            ProcessPsq();
+                            TraceSlope();
                         }
                     }
                 }
             }
 
-            private void ProcessSq()
+            ///<summary> Processes a depression by performing a region growing operation on it with the depression cells that are currently in the queue. </summary>
+            private void FillDepression()
             {
                 while (!Sq.IsEmpty())
                 {
@@ -153,16 +164,13 @@ namespace TerrainGenerator
 
                             var neighbourSpill = HeightMap[n];
 
-                            if (cell.spillHeight < neighbourSpill)
+                            if (neighbourSpill > cell.spillHeight)
                             {
-                                Processed[n] = true;
-                                Psq.Enqueue(SpillNode.CreateInstance(n, neighbourSpill));
+                                AddSlopeCell(n, neighbourSpill);
                             }
                             else
                             {
-                                Processed[n] = true;
-                                HeightMap[n] = cell.spillHeight;
-                                Sq.Enqueue(SpillNode.CreateInstance(n, cell.spillHeight));
+                                AddDepressionCell(n, cell.spillHeight);
                             }
 
                         }
@@ -170,7 +178,9 @@ namespace TerrainGenerator
                 }
             }
 
-            private void ProcessPsq()
+            ///<summary> Processes a slope by tracing the slope cells that are currently in the queue.
+            /// </summary>
+            private void TraceSlope()
             {
                 while (!Psq.IsEmpty())
                 {
@@ -198,17 +208,77 @@ namespace TerrainGenerator
 
                             if (neighbourSpill > cell.spillHeight)
                             {
-                                Processed[n] = true;
-                                Psq.Enqueue(SpillNode.CreateInstance(n, neighbourSpill));
+                                AddSlopeCell(n, neighbourSpill);
                             }
                             else
                             {
                                 if (CanSpill(cell, i, j)) continue;
-                                Pq.Insert(cell.spillHeight, cell.id);
+                                AddPotentialSpillCell((i + 1) * 3 + j + 1, cell);
                                 shouldExit = true;
                                 break;
                             }
                         }
+                        if (shouldExit)
+                            break;
+                    }
+                }
+
+                TryToDiscardSpillCells();
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void AddSlopeCell(int id, float spillHeight)
+            {
+                Processed[id] = true;
+                Psq.Enqueue(SpillNode.CreateInstance(id, spillHeight));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void AddDepressionCell(int id, float spillHeight)
+            {
+                Processed[id] = true;
+                HeightMap[id] = spillHeight;
+                Sq.Enqueue(SpillNode.CreateInstance(id, spillHeight));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void AddPotentialSpillCell(int iteration, SpillNode cell)
+            {
+                const int cutoff = 2;
+
+                if (iteration <= cutoff)
+                    Potential.Enqueue(cell);
+                else
+                    Pq.Insert(cell.spillHeight, cell.id);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void TryToDiscardSpillCells()
+            {
+                while (!Potential.IsEmpty())
+                {
+                    var cell = Potential.Dequeue();
+
+                    var shouldExit = false;
+                    for (var i = -1; i <= 1; i++)
+                    {
+                        var verticalOffset = i * SideLength;
+
+                        for (var j = -1; j <= 1; j++)
+                        {
+                            if (i == 0 && j == 0)
+                                continue;
+
+                            var n = cell.id + j + verticalOffset;
+
+                            if (IsProcessed(n) || IndexOutOfBounds(n))
+                                continue;
+
+                            Pq.Insert(cell.spillHeight, cell.id);
+                            shouldExit = true;
+                            break;
+                        }
+
                         if (shouldExit)
                             break;
                     }
