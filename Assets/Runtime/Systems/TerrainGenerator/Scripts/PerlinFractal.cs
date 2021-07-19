@@ -32,7 +32,7 @@ namespace TerrainGenerator {
         
 
 
-        void Setup()
+        public void Setup()
         {
             offsets = new Vector2[octaves];
             prng = new System.Random(seed);

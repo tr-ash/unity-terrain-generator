@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Profiling;
 
@@ -227,14 +228,8 @@ namespace TerrainGenerator
             thermalErosion.size = terrain.size;
             thermalErosion.view = view;
 
-            Profiler.maxUsedMemory = 2147483647 / 2;
-            
             MakeHeightmap();
             
-        }
-
-        public void Update()
-        {
         }
 
         public void Awake()
@@ -245,37 +240,6 @@ namespace TerrainGenerator
         public void OnValidate()
         {
             detailFractal.OnValidate();
-        }
-
-        static class HilbertCurve
-        {
-            public static int xy2d(int n, int x, int y) {
-                int rx, ry, s, d=0;
-                for (s = n/2; s>0; s/=2)
-                {
-                    rx = ((x & s) > 0) ? 1 : 0;
-                    ry = ((y & s) > 0) ? 1 : 0;
-                    d += s * s * ((3 * rx) ^ ry);
-                    rot(n, ref x, ref y, rx, ry);
-                }
-                return d;
-            }
-
-            static void rot(int n, ref int x, ref int y, int rx, int ry)
-            {
-                if (ry == 0)
-                {
-                    if (rx == 1)
-                    {
-                        x = n - 1 - x;
-                        y = n - 1 - y;
-                    }
-
-                    int t = x;
-                    x = y;
-                    y = t;
-                }
-            }
         }
 
         void MakeHeightmap()
@@ -302,42 +266,59 @@ namespace TerrainGenerator
                 SubdivideHeights();
                 Profiler.EndSample();
 
-                Profiler.BeginSample("RemoveMinima");
-                RemoveMinima();
-                Profiler.EndSample();
-
-                
-                
                 frequency *= 2;
             }
 
-            
+            Profiler.BeginSample("RemoveMinima");
+            var minHeight = Mathf.Infinity;
+            var minIndex = 0;
+            var heightMap = new NativeArray<float>((view.squareCount + 1) * (view.squareCount + 1), Allocator.Persistent);
 
-            
-            // Measure pre-sortedness.
+            for (var x = 0; x <= view.squareCount; x++)
+            {
+                for (var y = 0; y <= view.squareCount; y++)
+                {
+                    var h = view.DirectSample(x, y);
+                    heightMap[x + y * (view.squareCount + 1)] = h;
+                    if (h >= minHeight) continue;
+                    minIndex = x + y * (view.squareCount + 1);
+                    minHeight = h;
+                }
+            }
+
+            PriorityFlood.FloodHeightmap(view.squareCount + 1, heightMap, minIndex);
+
+            for (var i = 0; i < (view.squareCount + 1) * (view.squareCount + 1); i++)
+            {
+                view.DirectSet(i % (view.squareCount + 1), i / (view.squareCount + 1), heightMap[i]);
+            }
+
+            heightMap.Dispose();
+            Profiler.EndSample();
+
 
             Debug.Log("Finished Generating Heights");
 
 
-            //Debug.Log("Started post-processing");
+            Debug.Log("Started post-processing");
 
             
-            // thermalErosion.Erode();
+             thermalErosion.Erode();
 
 
-            //Debug.Log("Re-adding lost details.");
+            Debug.Log("Re-adding lost details.");
 
-            // for (int x = 0; x <= view.squareCount; x++)
-            // {
-            //     for (int y = 0; y <= view.squareCount; y++)
-            //     {
-            //         float h = view.DirectSample(x, y);
-            //         float dx = (float)x / (float)view.squareCount;
-            //         float dy = (float)y / (float)view.squareCount;
+             for (var x = 0; x <= view.squareCount; x++)
+             {
+                 for (var y = 0; y <= view.squareCount; y++)
+                 {
+                     var h = view.DirectSample(x, y);
+                     var dx = (float)x / (float)view.squareCount;
+                     var dy = (float)y / (float)view.squareCount;
 
-            //         view.DirectSet(x, y, Mathf.Clamp(h + detailFractal.Sample(dx, dy), 0f, 1f));
-            //     }
-            // }
+                     view.DirectSet(x, y, Mathf.Clamp(h + detailFractal.Sample(dx, dy), 0f, 1f));
+                 }
+             }
 
             terrain.SetHeights(0, 0, heights);
 
@@ -450,261 +431,6 @@ namespace TerrainGenerator
             view.SetHeight(1, 0, 0.0f);
             view.SetHeight(1, 1, 0.0f);
         }
-
-        private int GetNeighbours(int x, int y, ref (int, int)[] neighbours)
-        {
-            int squareCount = view.squareCount;
-            int i = 0;
-
-            for (int dx = -1; dx <= 1; dx++)
-            {
-                for (int dy = -1; dy <= 1; dy++)
-                {
-                    if (dx == 0 && dy == 0)
-                        continue;
-                    
-
-                    int newX = x + dx;
-
-                    if (newX < 0 || newX > squareCount)
-                        continue;
-                    
-                    int newY = y + dy;
-
-                    if (newY < 0 || newY > squareCount)
-                        continue;
-
-                    neighbours[i] = (newX, newY);
-                    i++;
-                }
-            }
-
-            return i;
-        }
-
-
-        public static float MaxRaise = 1f;
-
-        private struct IntervalEvent
-        {
-            public enum EventCategory
-            {
-                REACH_START,
-                REACH_END
-            }
-
-            public int index {get;}
-            public EventCategory type {get;}
-            
-
-            public IntervalEvent(int p, EventCategory t)
-            {
-                this.index = p;
-                this.type = t;
-            }
-        }
-
-        private enum VertexState
-        {
-            UNPROCESSED,
-            MOVING,
-            FIXED
-        }
-
-        // todo: can we use union find? wu's algorithm
-        // not sure how we can get around the raising though - possibly with a pointer?
-        // or we could do all the raising at the end.
-
-        // i think we actually have to do all the raising at the end if we don'
-        private void FloodfillRaise(int x, int y, float h, ref VertexState[,] states)
-        {
-
-            Queue<(int, int)> toVisit = new Queue<(int, int)>();
-            (int, int)[] neighbours = new (int, int)[8];
-
-            toVisit.Enqueue((x, y));
-
-            while (toVisit.Count > 0)
-            {
-                (int x, int y) e = toVisit.Dequeue();
-
-                if (states[e.x, e.y] == VertexState.MOVING)
-                {
-                    states[e.x, e.y] = VertexState.FIXED;
-                    
-                    float h2 = view.DirectSample(e.x, e.y);
-                    if (h2 < h)
-                        view.DirectSet(e.x, e.y, h);
-                }
-
-                int count = GetNeighbours(e.x, e.y, ref neighbours);
-                
-                for (int i = 0; i < count; i++)
-                {
-                    (int x, int y) n = neighbours[i];
-                    if (states[n.x, n.y] == VertexState.MOVING)
-                    {
-                        states[n.x, n.y] = VertexState.FIXED;
-                    
-                        float h2 = view.DirectSample(n.x, n.y);
-                        if (h2 < h)
-                            view.DirectSet(n.x, n.y, h);
-                        toVisit.Enqueue(n);
-                    }
-                }
-            }
-        }
-
-        public static class ZOrder
-        {
-            public static int bits(int n)
-            {
-                return Mathf.FloorToInt(Mathf.Log(n, 2f));
-            }
-
-            public static System.Int32 interleave(int n, System.Int32 x, System.Int32 y)
-            {
-                System.Int32 c = 0;
-                for (int i = 0; i < n; i++)
-                {
-                    c |= (x & (1 << i)) << i;
-                    c |= (y & (1 << i)) << (i + 1);
-                }
-
-                return c;
-            }
-        }
-        public void RemoveMinima()
-        {
-            Profiler.BeginSample("Sorter");
-            
-            int pointCount = (view.squareCount + 1) * (view.squareCount + 1);
-            var pointsAsc = new (int x, int y)[pointCount];
-            var pointHeights = new float[pointCount];
-
-            // todo:switch to linear array of 4x4 grids, less cache misses.
-            // or just union find?
-            VertexState[,] vertexStates = new VertexState[(view.squareCount + 1), (view.squareCount + 1)];
-
-            int p2Square = view.squareCount * view.squareCount;
-            int bits = ZOrder.bits(p2Square);
-
-
-            (int x, int y) minPos = (0, 0);
-            float minHeight = Mathf.Infinity;
-
-            // todo: all of this can be done in parallel
-            for (int x = 0; x < view.squareCount; x++)
-            {
-                for (int y = 0; y < view.squareCount; y++)
-                {
-                    float h = view.DirectSample(x, y);
-                    int i = ZOrder.interleave(bits, x, y);
-                    // int i = (x + y * (view.squareCount + 1));
-                    pointsAsc[i] = (x, y);
-                    pointHeights[i] = h;
-
-                    if (h < minHeight)
-                    {
-                        minHeight = h;
-                        minPos = (x, y);
-                    }
-                }
-            }
-
-            int remain = p2Square;
-
-            for (int x = 0; x <= view.squareCount; x++)
-            {
-                float h = view.DirectSample(x, view.squareCount);
-                pointsAsc[remain] = (x, view.squareCount);
-                pointHeights[remain] = h;
-                
-                if (h < minHeight)
-                {
-                    minHeight = h;
-                    minPos = (x, view.squareCount);
-                }
-
-                remain++;
-            }
-
-            for (int y = 0; y < view.squareCount; y++)
-            {
-                float h = view.DirectSample(view.squareCount, y);
-                pointsAsc[remain] = (view.squareCount, y);
-                pointHeights[remain] = h;
-
-                if (h < minHeight)
-                {
-                    minHeight = h;
-                    minPos = (view.squareCount, y);
-                }
-                remain++;
-            }
-
-            for (int x = 0; x < (view.squareCount + 1); x++)
-            {
-                for (int y = 0; y < (view.squareCount + 1); y++)
-                {
-                    vertexStates[x, y] = VertexState.UNPROCESSED;
-                }
-            }
-
-            vertexStates[minPos.x, minPos.y] = VertexState.FIXED;
-
-            
-            System.Array.Sort(pointHeights, pointsAsc);
-            Profiler.EndSample();
-
-
-            Profiler.BeginSample("Process Array");
-            (int x, int y)[] neighbours = new (int, int)[8];
-
-            int min = 0;
-
-            // Raise the plain.
-            while (min < pointCount)
-            {
-                var v = pointsAsc[min];
-
-                // Add a vertex if the plane has reached the start of its range.
-                int count = GetNeighbours(v.x, v.y, ref neighbours);
-
-                // If v has a fixed neighbour, v also becomes fixed.
-                for (int i = 0; i < count; i++)
-                {
-                    var n = neighbours[i];
-                    if (vertexStates[n.x, n.y] == VertexState.FIXED)
-                    {
-                        vertexStates[v.x, v.y] = VertexState.FIXED;
-                        break;
-                    }
-                }
-
-                if (vertexStates[v.x, v.y] == VertexState.FIXED)
-                {
-                    // If v is fixed, and has a local minimum as its neighbour, that entire local minimum becomes fixed.
-                    for (int i = 0; i < count; i++)
-                    {
-                        var n = neighbours[i];
-                        if (vertexStates[n.x, n.y] == VertexState.MOVING)
-                        {
-                            FloodfillRaise(n.x, n.y, view.DirectSample(v.x, v.y), ref vertexStates);
-                        }
-                    }
-                }
-                else
-                {
-                    vertexStates[v.x, v.y] = VertexState.MOVING;
-                }
-
-                min++;
-            }
-
-            Profiler.EndSample();
-        }
-
 
         // Apply erosion simulation
         // - Thermal Erosion

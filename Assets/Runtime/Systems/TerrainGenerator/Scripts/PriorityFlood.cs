@@ -5,12 +5,13 @@ using Unity.Jobs;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
+using UnityEngine;
 
 namespace TerrainGenerator
 {
-    internal static class PriorityFlood
+    public static class PriorityFlood
     {
-        private static void FloodHeightmap(int sideLength, NativeArray<float> heightmap, int indexOfMin)
+        public static void FloodHeightmap(int sideLength, NativeArray<float> heightmap, int indexOfMin)
         {
             var guessSize = (int) math.max((sideLength * sideLength * 0.3), 1);
 
@@ -40,6 +41,7 @@ namespace TerrainGenerator
             pq.Dispose();
             sq.Dispose();
             psq.Dispose();
+            potential.Dispose();
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -50,10 +52,10 @@ namespace TerrainGenerator
                 return new SpillNode(id, spillHeight);
             }
 
-            [MarshalAs(UnmanagedType.I4)]
+            // [MarshalAs(UnmanagedType.I4)]
             public readonly int id;
 
-            [MarshalAs(UnmanagedType.R4)]
+            // [MarshalAs(UnmanagedType.R4)]
             public readonly float spillHeight;
 
             private SpillNode(int id, float spillHeight)
@@ -86,7 +88,6 @@ namespace TerrainGenerator
             public int SeedCell;
 
             // The value of each index indicates whether the node it corresponds to has a spill path that is lower than c.
-            //
             private SMatrix mat;
 
             public void Execute()
@@ -102,10 +103,13 @@ namespace TerrainGenerator
                 Processed[SeedCell] = true;
                 Pq.Insert(HeightMap[SeedCell], SeedCell);
 
+
+
                 while (!Pq.IsEmpty())
                 {
                     var cell = Pq.PeekMin();
                     var cellSpill = Pq.MinKey();
+                    // Debug.Log(String.Format("PQ Cell: {0}, {1}", Pq.MinKey(), Pq.PeekMin()));
 
                     Pq.DeleteMin();
 
@@ -121,7 +125,7 @@ namespace TerrainGenerator
 
                             var n = cell + j + verticalOffset;
 
-                            if (IsProcessed(n) || IndexOutOfBounds(n))
+                            if (IsProcessed(n))
                                 continue;
 
                             var nSpillEl = HeightMap[n];
@@ -159,7 +163,7 @@ namespace TerrainGenerator
 
                             var n = cell.id + j + verticalOffset;
 
-                            if (IsProcessed(n) || IndexOutOfBounds(n))
+                            if (IsProcessed(n))
                                 continue;
 
                             var neighbourSpill = HeightMap[n];
@@ -178,8 +182,7 @@ namespace TerrainGenerator
                 }
             }
 
-            ///<summary> Processes a slope by tracing the slope cells that are currently in the queue.
-            /// </summary>
+            ///<summary> Processes a slope by tracing the slope cells that are currently in the queue. </summary>
             private void TraceSlope()
             {
                 while (!Psq.IsEmpty())
@@ -201,7 +204,7 @@ namespace TerrainGenerator
 
                             var n = cell.id + j + verticalOffset;
 
-                            if (IsProcessed(n) || IndexOutOfBounds(n))
+                            if (IsProcessed(n))
                                 continue;
 
                             var neighbourSpill = HeightMap[n];
@@ -271,7 +274,7 @@ namespace TerrainGenerator
 
                             var n = cell.id + j + verticalOffset;
 
-                            if (IsProcessed(n) || IndexOutOfBounds(n))
+                            if (IsProcessed(n))
                                 continue;
 
                             Pq.Insert(cell.spillHeight, cell.id);
@@ -289,12 +292,12 @@ namespace TerrainGenerator
             private bool IndexOutOfBounds(int n) => n >= HeightMap.Length || n < 0;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private bool IsProcessed(int n) => Processed[n];
+            private bool IsProcessed(int n) => IndexOutOfBounds(n) || Processed[n];
 
             ///<summary>
             /// This method determines whether the neighbour of focus (j + i * SideLength) has a spill path or a spill outlet if it is a depression cell.
             /// <para>
-            /// If all neighbours of the focus have a spill path or spill outlet, then there is no reason to move focus to the priority queue.
+            /// If all neighbours of the focus have a spill path or spill outlet, then there is no reason to move the focal element to the priority queue.
             /// </para>
             /// </summary>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -314,9 +317,9 @@ namespace TerrainGenerator
                         if (u == 0 && v == 0 || IndexOutOfBounds(n))
                             continue;
 
-                        if (mat[y][x] || IsProcessed(n) && HeightMap[n] < focus.spillHeight)
+                        if (mat[y + 2][x + 2] || IsProcessed(n) && HeightMap[n] < focus.spillHeight)
                         {
-                            mat[y][x] = true;
+                            mat[y + 2][x + 2] = true;
                             return true;
                         }
                     }
