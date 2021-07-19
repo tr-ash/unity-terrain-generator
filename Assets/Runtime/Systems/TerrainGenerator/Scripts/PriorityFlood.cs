@@ -177,11 +177,7 @@ namespace TerrainGenerator
                     var cell = Psq.Dequeue();
 
                     // Clear S matrix.
-                    for (var i = 0; i < 5; i++)
-                    for (var j = 0; j < 5; j++)
-                    {
-                        mat[i][j] = false;
-                    }
+                    mat.MakeFalse();
 
                     var shouldExit = false;
                     for (var i = -1; i <= 1; i++)
@@ -224,7 +220,6 @@ namespace TerrainGenerator
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private bool IsProcessed(int n) => Processed[n];
-
 
             ///<summary>
             /// This method determines whether the neighbour of focus (j + i * SideLength) has a spill path or a spill outlet if it is a depression cell.
@@ -292,6 +287,9 @@ namespace TerrainGenerator
                     fixed (bool* array = &a) { array[index] = value; }
                 }
             }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void MakeFalse() => a = b = c = d = e = false;
         }
 
         [Serializable]
@@ -314,6 +312,16 @@ namespace TerrainGenerator
                     #endif
                     fixed (SMatrix* array = &this) { return ref ((SRow*)array)[index]; }
                 }
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void MakeFalse()
+            {
+                c0.MakeFalse();
+                c1.MakeFalse();
+                c2.MakeFalse();
+                c3.MakeFalse();
+                c4.MakeFalse();
             }
         }
         #endregion
